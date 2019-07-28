@@ -1,0 +1,150 @@
+// CC-BY by Yury  Bederov aka Avtomatron
+
+ 
+// You must make script property with property "botid" and value - your bot id for example: "154407444:AAE1iuD73WO9v8dqSCddyDzmfpzAg1TF6Vk"
+// then Deploy this script as web app and
+// set webhook to app url, for example:
+// https://api.telegram.org/bot154407444:AAE1iuD73WO9v8dqSCddyDzmfpzAg1TF6Vk/setWebhook?url=https://script.google.com/macros/s/sljkdfnlakwjnflajkwefr-wekjrawlkejrhqwe-w432asdf/exec
+// 
+// to log requests create folder "telegram_bug_bot"  and uncomment  strings started with "saveData" 
+
+function doPost(e) {
+  
+  var edata = e.postData.contents;
+  var obj = JSON.parse(edata);
+//  saveData("resived_webhok :"+JSON.stringify(obj));
+  var sender;
+  var chatid;
+  var message;
+  var values;
+  var buttonclicked;
+  var cat;
+  var category;
+  const date = Utilities.formatDate(new Date(), "GMT+3", "dd.MM.yyyy");
+  const time = Utilities.formatDate(new Date(), "GMT+3", "HH:mm:ss");
+  
+  if (typeof(obj.callback_query) == 'undefined'){
+    sender = obj.message.from.username;
+    chatid = obj.message.chat.id;  
+    var current_message_id=obj.message.message_id;
+    PropertiesService.getScriptProperties().setProperty(chatid, current_message_id)
+    if (typeof(obj.message.reply_to_message) != 'undefined'){
+     
+      category = obj.message.reply_to_message.text.split(":")[1];
+      if(obj.message.hasOwnProperty('text')) {
+        message = obj.message.text;
+        values = [[date, time, message, sender]];       
+      }
+      appendValuesInSheet(values, "Sheet1");
+      sendmessage("Saved 😉",chatid);
+      
+      sendmessage("",chatid);
+    }
+    else{
+      sendmessage("Select category first 😡",chatid);
+      sendmessage("",chatid);
+    }
+  }
+  else{
+    var current_message_id=obj.callback_query.message.message_id;
+    
+    chatid = obj.callback_query.message.chat.id;
+    var last_message_id = Number(PropertiesService.getScriptProperties().getProperty(chatid));
+ 
+    if (current_message_id!=last_message_id ){
+      PropertiesService.getScriptProperties().setProperty(chatid, current_message_id)
+  
+      sender = obj.callback_query.from.username; 
+      buttonclicked = obj.callback_query.data;
+      
+      if(buttonclicked == "money"){
+        sendmessagecat("money",chatid);
+      }
+   
+    }
+    else{
+      sender = obj.callback_query.from.username; 
+      values = [[date, time, "tries to send fake message", sender]];   
+      appendValuesInSheet(values, "Messages");
+    }
+  }
+}
+
+
+
+function appendValuesInSheet(values, sheetName) {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName(sheetName);
+  var lastRow = sheet.getLastRow();
+  sheet.insertRowsAfter(lastRow, values.length);
+  sheet.getRange(lastRow+1 , 1, values.length, values[0].length).setValues(values);
+  
+}
+
+function sendmessagecat(cat,chatid){
+  var botid = PropertiesService.getScriptProperties().getProperty('botid');
+  var text1='Okay, money:'+cat;
+  var requestData = {'chat_id': chatid, 'text': text1,'reply_markup': {'force_reply': true}};
+  var options = {  'method' : 'post','contentType': 'application/json', 'payload' : JSON.stringify(requestData)};
+  var finalurl = 'https://api.telegram.org/bot'+botid+"/sendmessage"
+  var response=UrlFetchApp.fetch(finalurl, options);
+  var obj = JSON.parse(response.getContentText());
+  var message_id = obj.result.message_id;   
+ 
+//  saveData("sendmessagecat recived:"+JSON.stringify(obj));
+} 
+
+
+function sendmessage(text,chatid){
+  var botid = PropertiesService.getScriptProperties().getProperty('botid');
+  var requestData;
+  if (text!= ""){
+    requestData = {
+      'chat_id': chatid,
+      'text': text 
+    };
+  }  
+  
+  else{
+    requestData = {
+      'chat_id': chatid,
+      'text': 'Select category',
+      'reply_markup': {
+        "inline_keyboard":[[{"text":"💰","callback_data":"money"}]]
+      }
+    };
+  }
+  
+  var options = {
+    'method' : 'post',
+    'contentType': 'application/json',
+    'payload' : JSON.stringify(requestData)
+  };
+  var finalurl = 'https://api.telegram.org/bot'+botid+"/sendmessage"
+  var response=UrlFetchApp.fetch(finalurl, options);
+  var obj = JSON.parse(response.getContentText());
+  var message_id = obj.result.message_id;   
+//  saveData("sendmessage  recived:"+JSON.stringify(obj));
+}
+
+
+function saveData(contents) {
+  var filename = "log.txt";
+  
+  var folders = DriveApp.getFoldersByName("telegram_bug_bot");
+  if (folders.hasNext()) {
+    var folder = folders.next();
+    
+    var children = folder.getFilesByName(filename);
+    var file = null;
+    
+    
+    if (children.hasNext()) {
+      file = children.next();
+      var contents2= file.getBlob().getDataAsString() + "\n\n"+contents;
+      file.setContent(contents2);
+    } else {
+      file = folder.createFile(filename, contents);
+    }
+  }
+}
